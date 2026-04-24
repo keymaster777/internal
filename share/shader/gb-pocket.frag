@@ -3,26 +3,22 @@
 // Version: 1
 
 void main() {
-    vec3 c = texture2D(u_tex, v_uv).rgb;
+    const float PI = 3.14159265;
+    const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 
-    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    const vec3 p0 = vec3(0.05, 0.10, 0.12);
+    const vec3 p1 = vec3(0.28, 0.42, 0.45);
+    const vec3 p2 = vec3(0.55, 0.70, 0.72);
+    const vec3 p3 = vec3(0.82, 0.94, 0.96);
 
-    vec3 p0 = vec3(0.05, 0.10, 0.12);
-    vec3 p1 = vec3(0.28, 0.42, 0.45);
-    vec3 p2 = vec3(0.55, 0.70, 0.72);
-    vec3 p3 = vec3(0.82, 0.94, 0.96);
+    float l = dot(texture2D(u_tex, v_uv).rgb, LUMA);
 
-    vec3 col;
+    vec3 col = mix(p0, p1, step(0.25, l));
+    col = mix(col, p2, step(0.50, l));
+    col = mix(col, p3, step(0.75, l));
 
-    if (l < 0.25) col = p0;
-    else if (l < 0.5) col = p1;
-    else if (l < 0.75) col = p2;
-    else col = p3;
+    float gx = 0.92 + 0.08 * sin(v_uv.x * u_resolution.x * PI);
+    float gy = 0.94 + 0.06 * sin(v_uv.y * u_resolution.y * PI);
 
-    float gx = 0.92 + 0.08 * sin(v_uv.x * u_resolution.x * 3.1415);
-    float gy = 0.94 + 0.06 * sin(v_uv.y * u_resolution.y * 3.1415);
-
-    col *= gx * gy;
-
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(col * gx * gy, 1.0);
 }

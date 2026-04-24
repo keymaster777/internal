@@ -3,11 +3,10 @@
 // Version: 1
 
 void main() {
-    float size=128.0;
+    const float size = 128.0;
 
-    vec2 grid=vec2(size, size*(u_resolution.y/u_resolution.x));
-    vec2 uv=floor(v_uv*grid)/grid;
-    vec3 col=texture2D(u_tex, uv).rgb;
+    vec2 grid = vec2(size, size * (u_resolution.y / u_resolution.x));
+    vec2 uv = floor(v_uv * grid) / grid;
 
-    gl_FragColor=vec4(col, 1.0);
+    gl_FragColor = vec4(texture2D(u_tex, uv).rgb, 1.0);
 }

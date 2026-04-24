@@ -3,20 +3,20 @@
 // Version: 1
 
 void main() {
-    vec2 px=vec2(1.0)/u_resolution;
+    const float PI = 3.14159265;
+    const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 
-    vec3 c0=texture2D(u_tex, v_uv).rgb;
-    vec3 c1=texture2D(u_tex, v_uv+vec2(px.x, 0.0)).rgb;
-    vec3 c2=texture2D(u_tex, v_uv-vec2(px.x, 0.0)).rgb;
-    vec3 c3=texture2D(u_tex, v_uv+vec2(px.x*2.0, 0.0)).rgb;
+    float px = 1.0 / u_resolution.x;
 
-    float l=dot(c0, vec3(.299, .587, .114));
-    vec3 chroma=(c1+c2+c3)*.333;
-    vec3 col=mix(vec3(l), chroma, .7);
+    vec3 c0 = texture2D(u_tex, v_uv).rgb;
+    vec3 c1 = texture2D(u_tex, v_uv + vec2(px,       0.0)).rgb;
+    vec3 c2 = texture2D(u_tex, v_uv - vec2(px,       0.0)).rgb;
+    vec3 c3 = texture2D(u_tex, v_uv + vec2(px * 2.0, 0.0)).rgb;
 
-    float phase=mod(floor(v_uv.y*u_resolution.y), 2.0);
-    col.rg+=phase*.03;
-    float scan=.9+.1*sin(v_uv.y*u_resolution.y*3.1415);
+    vec3 col = mix(vec3(dot(c0, LUMA)), (c1 + c2 + c3) * (1.0 / 3.0), 0.7);
 
-    gl_FragColor=vec4(col*scan, 1.0);
+    col.rg += mod(floor(v_uv.y * u_resolution.y), 2.0) * 0.03;
+    col    *= 0.9 + 0.1 * sin(v_uv.y * u_resolution.y * PI);
+
+    gl_FragColor = vec4(col, 1.0);
 }
