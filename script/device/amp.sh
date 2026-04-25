@@ -2,7 +2,6 @@
 
 . /opt/muos/script/var/func.sh
 
-
 case "$(GET_VAR "device" "board/name")" in
 	rg-vita*)
 		# Initialise external speaker amp (TAS58xx, I2C bus 3)

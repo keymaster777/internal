@@ -114,8 +114,8 @@ LOAD_MODULE() {
 	if grep -qw "^$NET_NAME" /proc/modules; then
 		case "$BOARD_NAME" in
 			rg-vita*)
-            	# PCIe WiFi - autoloaded by kernel, no SDIO reload cycle needed
-            ;;
+				# PCIe WiFi - autoloaded by kernel, no SDIO reload cycle needed
+				;;
 			rg*)
 				modprobe -qr "$NET_NAME"
 				sleep 1
