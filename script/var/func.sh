@@ -665,6 +665,16 @@ IS_HANDHELD_MODE() {
 	[ "$(GET_VAR "config" "boot/device_mode")" -eq 0 ]
 }
 
+DISPLAY_SYSFS_BACKLIGHT() {
+	for B in /sys/class/backlight/*; do
+		[ -f "$B/brightness" ] && {
+			printf "%s\n" "$B"
+			return 0
+		}
+	done
+	return 1
+}
+
 # Writes a setting value to the display driver.
 # Typically used for brightness on most devices but has
 # HDMI mode support for those who use it, unfortunately
@@ -674,6 +684,13 @@ DISPLAY_WRITE() {
 	DW_CMD="${2}"
 	DW_PARAM="${3}"
 
+	# Prefer sysfs backlight if available
+	if BL_PATH=$(DISPLAY_SYSFS_BACKLIGHT); then
+		printf "%s" "$DW_PARAM" >"$BL_PATH/brightness"
+		return
+	fi
+
+	# Fallback to dispdbg parameters
 	case "$(GET_VAR "device" "board/name")" in
 		rg* | mgx* | tui*)
 			printf "%s" "${DW_NAME}" >/sys/kernel/debug/dispdbg/name
@@ -681,11 +698,6 @@ DISPLAY_WRITE() {
 			printf "%s" "${DW_PARAM}" >/sys/kernel/debug/dispdbg/param
 			printf "1\n" >/sys/kernel/debug/dispdbg/start
 			;;
-		rk-g350*)
-			printf "%s" "${DW_PARAM}" >/sys/class/backlight/backlight/brightness
-			;;
-		*) ;;
-
 	esac
 }
 
@@ -697,6 +709,11 @@ DISPLAY_READ() {
 	DR_NAME="${1}"
 	DR_CMD="${2}"
 
+	if BL_PATH=$(DISPLAY_SYSFS_BACKLIGHT); then
+		cat "$BL_PATH/brightness"
+		return
+	fi
+
 	case "$(GET_VAR "device" "board/name")" in
 		rg* | mgx* | tui*)
 			printf "%s" "${DR_NAME}" >/sys/kernel/debug/dispdbg/name
@@ -704,11 +721,6 @@ DISPLAY_READ() {
 			printf "1\n" >/sys/kernel/debug/dispdbg/start
 			cat /sys/kernel/debug/dispdbg/info
 			;;
-		rk-g350*)
-			cat /sys/class/backlight/backlight/brightness
-			;;
-		*) ;;
-
 	esac
 }
 
