@@ -2,7 +2,8 @@
   "devices": [
     "gcs-h36s",
     "rg40xx-h",
-    "rgcubexx-h"
+    "rgcubexx-h",
+    "rg-vita-pro"
   ],
   "RGB_BRIGHT_DOWN": {
     "handle_hold": false,

@@ -1,20 +1,4 @@
 {
-  "devices": [
-    "rg28xx-h",
-    "rg34xx-h",
-    "rg34xx-sp",
-    "rg35xx-2024",
-    "rg35xx-h",
-    "rg35xx-plus",
-    "rg35xx-pro",
-    "rg35xx-sp",
-    "rg40xx-h",
-    "rg40xx-v",
-    "rgcubexx-h",
-    "tui-brick",
-    "tui-spoon",
-    "rk-g350-v"
-  ],
   "SLEEP_SHORT": {
     "handle_hold": false,
     "inputs": [
