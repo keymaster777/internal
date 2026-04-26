@@ -138,6 +138,7 @@ RESET_MIXER() {
 	[ -n "$MAX_VOL" ] || MAX_VOL=100
 
 	case "$(GET_VAR "device" "board/name")" in
+		rg-vita*) return 0 ;;
 		mgx* | tui*) DEV_VOL=0 ;;
 		*) DEV_VOL=$MAX_VOL ;;
 	esac
