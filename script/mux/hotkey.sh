@@ -5,7 +5,10 @@
 IS_NORMAL_MODE && IS_HANDHELD_MODE && /opt/muos/script/mux/idle.sh start
 
 HOTKEY_FIFO="$MUOS_RUN_DIR/hotkey"
-[ -p "$HOTKEY_FIFO" ] || mkfifo "$HOTKEY_FIFO"
+[ -p "$HOTKEY_FIFO" ] || {
+	rm -f "$HOTKEY_FIFO"
+	mkfifo "$HOTKEY_FIFO"
+}
 
 RETROWAIT="$(GET_VAR "config" "settings/advanced/retrowait")"
 BOARD_NAME="$(GET_VAR "device" "board/name")"
@@ -63,7 +66,7 @@ SLEEP() {
 	[ -f "$MUOS_RUN_DIR/recent_wake" ] && return 0
 
 	# Ignore if our lid switch is disabled
-	case "$(GET_VAR "device" "board/name")" in
+	case "$BOARD_NAME" in
 		rg34xx-sp | rg35xx-sp) [ "$(GET_VAR "config" "settings/advanced/lidswitch")" -eq 0 ] && return 0 ;;
 	esac
 
@@ -90,10 +93,25 @@ RGBCLI() {
 }
 
 while :; do
+	[ -p "$HOTKEY_FIFO" ] || {
+		rm -f "$HOTKEY_FIFO"
+		mkfifo "$HOTKEY_FIFO"
+	}
+
 	/opt/muos/frontend/muhotkey >"$HOTKEY_FIFO" &
 	MU_PID=$!
 
-	while IFS= read -r HOTKEY <"$HOTKEY_FIFO"; do
+	while :; do
+		if ! kill -0 "$MU_PID" 2>/dev/null; then
+			break
+		fi
+
+		HOTKEY=$(IFS= read -r LINE <"$HOTKEY_FIFO" && printf '%s' "$LINE")
+		[ -z "$HOTKEY" ] && {
+			sleep 0.05
+			continue
+		}
+
 		[ -f "$MUOS_RUN_DIR/recent_wake" ] && continue
 
 		CHARGE_CHECK=$((CHARGE_CHECK + 1))
