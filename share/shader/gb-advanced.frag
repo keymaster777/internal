@@ -1,33 +1,62 @@
 // Name: Game Boy - Advanced
 // Author: MustardOS
-// Version: 1
+// Version: 2
 
-float hash(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.23);
-    return fract(p.x * p.y);
+vec2 native_res() {
+    return max(u_native_resolution, vec2(1.0));
+}
+
+vec2 clamp_uv(vec2 uv) {
+    vec2 px = 0.5 / native_res();
+    return clamp(uv, px, 1.0 - px);
+}
+
+vec2 snap_uv(vec2 uv) {
+    vec2 n = native_res();
+    return clamp_uv((floor(uv * n) + 0.5) / n);
+}
+
+vec3 sample_rgb(vec2 uv) {
+    return texture2D(u_tex, clamp_uv(uv)).rgb;
+}
+
+float edge_x(vec2 uv) {
+    vec2 n = native_res();
+    float px = uv.x * n.x;
+    return smoothstep(1.5, 4.0, px) *
+           smoothstep(1.5, 4.0, (n.x - 1.0) - px);
+}
+
+vec3 soft_sample(vec2 uv, vec2 px) {
+    vec3 c;
+
+    c = sample_rgb(uv) * 0.70;
+    c += sample_rgb(uv - vec2(px.x, 0.0)) * 0.15;
+    c += sample_rgb(uv + vec2(px.x, 0.0)) * 0.10;
+    c += sample_rgb(uv - vec2(0.0, px.y)) * 0.025;
+    c += sample_rgb(uv + vec2(0.0, px.y)) * 0.025;
+
+    return c;
 }
 
 void main() {
     const float PI = 3.14159265;
-    vec2 px = 1.0 / u_resolution;
 
-    vec3 c0 = texture2D(u_tex, v_uv).rgb;
-    vec3 c1 = texture2D(u_tex, v_uv - vec2(px.x * 1.2, 0.0)).rgb;
-    vec3 col = mix(c0, c1, 0.22);
+    vec2 n = native_res();
+    vec2 uv = snap_uv(v_uv);
+    vec2 px = 1.0 / n;
 
-    float y = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(y), col, 0.82) * vec3(0.88, 0.93, 0.86);
+    vec3 c = soft_sample(uv, px * 0.45);
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    vec3 col = mix(vec3(l), c, 0.98) * vec3(1.00, 0.99, 0.94);
 
-    float gx     = 0.91 + 0.09 * sin(v_uv.x * u_resolution.x * PI);
-    float gy     = 0.95 + 0.05 * sin(v_uv.y * u_resolution.y * PI);
-    float column = 0.975 + 0.025 * sin(v_uv.x * u_resolution.x * 1.5708);
+    float ex = edge_x(uv);
+    float gx = mix(1.0, 0.96 + 0.04 * sin(uv.x * n.x * PI), ex);
+    float gy = 0.98 + 0.02 * sin(uv.y * n.y * PI);
+    float column = mix(1.0, 0.990 + 0.010 * sin(uv.x * n.x * 1.5708), ex);
 
-    col *= gx * gy * column;
+    col *= gx * gy;
+    col *= column;
 
-    float alpha   = smoothstep(0.72, 1.0, y) * 0.28;
-    float grain   = (hash(v_uv * u_resolution) - 0.5) * 0.035;
-    vec3 backing  = vec3(0.72, 0.78, 0.62) + grain;
-
-    gl_FragColor = vec4(mix(col, backing, alpha), 1.0);
+    gl_FragColor = vec4(col, 1.0);
 }

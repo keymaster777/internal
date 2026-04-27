@@ -1,6 +1,6 @@
 // Name: Invert
 // Author: MustardOS
-// Version: 1
+// Version: 2
 
 void main() {
     vec4 c = texture2D(u_tex, v_uv);

@@ -1,6 +1,6 @@
 // Name: Drunken Waves
 // Author: MustardOS
-// Version: 1
+// Version: 2
 
 float tri(float x) {
     x = fract(x * 0.5 + 0.25);
@@ -9,15 +9,15 @@ float tri(float x) {
 
 void main() {
     float t = u_time * 0.0075;
-
     vec2 uv = v_uv;
+
     uv.x += tri(v_uv.y * 3.5 + t * 2.0) * 0.010;
     uv.y += tri(v_uv.x * 3.5 + t * 1.6) * 0.007;
 
     const float off = 0.005;
-    float r = texture2D(u_tex, uv + vec2(off, 0.0)).r;
-    float g = texture2D(u_tex, uv              ).g;
-    float b = texture2D(u_tex, uv - vec2(off, 0.0)).b;
+    float r = texture2D(u_tex, clamp(uv + vec2(off, 0.0), 0.0, 1.0)).r;
+    float g = texture2D(u_tex, clamp(uv, 0.0, 1.0)).g;
+    float b = texture2D(u_tex, clamp(uv - vec2(off, 0.0), 0.0, 1.0)).b;
 
     gl_FragColor = vec4(r, g, b, 1.0);
 }

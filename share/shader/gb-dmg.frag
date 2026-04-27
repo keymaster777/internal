@@ -1,6 +1,38 @@
 // Name: Game Boy - DMG
 // Author: MustardOS
-// Version: 1
+// Version: 2
+
+vec2 native_res() {
+    return max(u_native_resolution, vec2(1.0));
+}
+
+vec2 clamp_uv(vec2 uv) {
+    vec2 px = 0.5 / native_res();
+    return clamp(uv, px, 1.0 - px);
+}
+
+vec2 snap_uv(vec2 uv) {
+    vec2 n = native_res();
+    return clamp_uv((floor(uv * n) + 0.5) / n);
+}
+
+vec3 sample_rgb(vec2 uv) {
+    return texture2D(u_tex, clamp_uv(uv)).rgb;
+}
+
+float edge_x(vec2 uv) {
+    vec2 n = native_res();
+    float px = uv.x * n.x;
+    return smoothstep(1.5, 4.0, px) *
+           smoothstep(1.5, 4.0, (n.x - 1.0) - px);
+}
+
+vec3 map_palette(float l, vec3 p0, vec3 p1, vec3 p2, vec3 p3) {
+    if (l < 0.25) return mix(p0, p1, l / 0.25);
+    if (l < 0.50) return mix(p1, p2, (l - 0.25) / 0.25);
+    if (l < 0.75) return mix(p2, p3, (l - 0.50) / 0.25);
+    return p3;
+}
 
 void main() {
     const float PI = 3.14159265;
@@ -11,22 +43,19 @@ void main() {
     const vec3 p2 = vec3(0.56, 0.67, 0.22);
     const vec3 p3 = vec3(0.82, 0.90, 0.38);
 
-    vec3 c0 = texture2D(u_tex, v_uv).rgb;
-    vec3 c1 = texture2D(u_tex, v_uv - vec2(1.5 / u_resolution.x, 0.0)).rgb;
-    vec3 c = mix(c0, c1, 0.35);
+    vec2 n = native_res();
+    vec2 uv = snap_uv(v_uv);
 
-    float l = dot(c, LUMA);
+    float l = dot(sample_rgb(uv), LUMA);
+    vec3 col = map_palette(l, p0, p1, p2, p3);
 
-    vec3 col = mix(p0, p1, step(0.25, l));
-    col = mix(col, p2, step(0.50, l));
-    col = mix(col, p3, step(0.75, l));
+    float ex = edge_x(uv);
+    float gx = mix(1.0, 0.95 + 0.05 * sin(uv.x * n.x * PI), ex);
+    float gy = 0.98 + 0.02 * sin(uv.y * n.y * PI);
+    float column = mix(1.0, 0.990 + 0.010 * sin(uv.x * n.x * 1.5708), ex);
 
-    float gx     = 0.90 + 0.10 * sin(v_uv.x * u_resolution.x * PI);
-    float gy     = 0.95 + 0.05 * sin(v_uv.y * u_resolution.y * PI);
-    float column = 0.96  + 0.04  * sin(v_uv.x * u_resolution.x * 1.5708);
+    col *= gx * gy;
+    col *= column;
 
-    col *= gx * gy * column;
-
-    float g = dot(col, LUMA);
-    gl_FragColor = vec4(mix(vec3(g), col, 0.75), 1.0);
+    gl_FragColor = vec4(col, 1.0);
 }

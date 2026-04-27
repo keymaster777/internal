@@ -1,6 +1,10 @@
 // Name: Dither - Blue Noise
 // Author: MustardOS
-// Version: 1
+// Version: 2
+
+vec2 native_res() {
+    return max(u_native_resolution, vec2(1.0));
+}
 
 float noise(vec2 p) {
     p = fract(p * vec2(0.1031, 0.1030));
@@ -18,7 +22,7 @@ float blue(vec2 p) {
 
 void main() {
     vec3 col = texture2D(u_tex, v_uv).rgb;
-    float th = blue(v_uv * u_resolution + fract(u_time) * 37.0) * 0.12;
+    float th = blue(v_uv * native_res() + fract(u_time) * 37.0) * 0.12;
 
     gl_FragColor = vec4(floor((col + th) * 4.0 + 0.5) / 4.0, 1.0);
 }

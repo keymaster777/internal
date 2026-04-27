@@ -1,6 +1,6 @@
 // Name: Heat Mirage
 // Author: MustardOS
-// Version: 1
+// Version: 2
 
 void main() {
     float t = u_time * 0.025;
@@ -9,5 +9,6 @@ void main() {
     float w2 = sin(v_uv.y * 37.0 - t * 0.8);
     float distort = (w1 + w2) * 0.0025 * (0.4 + v_uv.y);
 
-    gl_FragColor = vec4(texture2D(u_tex, vec2(v_uv.x + distort, v_uv.y)).rgb, 1.0);
+    vec2 uv = clamp(vec2(v_uv.x + distort, v_uv.y), 0.0, 1.0);
+    gl_FragColor = vec4(texture2D(u_tex, uv).rgb, 1.0);
 }
