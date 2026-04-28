@@ -5,16 +5,20 @@
 IS_NORMAL_MODE && IS_HANDHELD_MODE && /opt/muos/script/mux/idle.sh start
 
 HOTKEY_FIFO="$MUOS_RUN_DIR/hotkey"
-[ -p "$HOTKEY_FIFO" ] || {
+
+if [ ! -p "$HOTKEY_FIFO" ]; then
 	rm -f "$HOTKEY_FIFO"
-	mkfifo "$HOTKEY_FIFO"
-}
+	mkfifo "$HOTKEY_FIFO" || exit 1
+fi
+
+exec 3<>"$HOTKEY_FIFO"
 
 RETROWAIT="$(GET_VAR "config" "settings/advanced/retrowait")"
 BOARD_NAME="$(GET_VAR "device" "board/name")"
 
 CHARGE_ACTIVE=0
 CHARGE_CHECK=0
+MU_PID=0
 
 HANDLE_HOTKEY() {
 	# This blocks the event loop, so commands here should finish quickly.
@@ -40,8 +44,8 @@ HANDLE_HOTKEY() {
 		RGB_COLOR_NEXT) RGBCLI -c up ;;
 
 		# "RetroArch Network Wait" combos:
-		RETROWAIT_IGNORE) [ "$RETROWAIT" -eq 1 ] && echo ignore >"$MUOS_RUN_DIR/net_start" ;;
-		RETROWAIT_MENU) [ "$RETROWAIT" -eq 1 ] && echo menu >"$MUOS_RUN_DIR/net_start" ;;
+		RETROWAIT_IGNORE) [ "$RETROWAIT" -eq 1 ] && printf "%s" ignore >"$MUOS_RUN_DIR/net_start" ;;
+		RETROWAIT_MENU) [ "$RETROWAIT" -eq 1 ] && printf "%s" menu >"$MUOS_RUN_DIR/net_start" ;;
 	esac
 }
 
@@ -92,50 +96,54 @@ RGBCLI() {
 		"$RGBCONTROLLER_DIR/love" "$RGBCONTROLLER_DIR/rgbcli" "$@"
 }
 
-while :; do
-	[ -p "$HOTKEY_FIFO" ] || {
-		rm -f "$HOTKEY_FIFO"
-		mkfifo "$HOTKEY_FIFO"
-	}
-
-	/opt/muos/frontend/muhotkey >"$HOTKEY_FIFO" &
+START_MUHOTKEY() {
+	/opt/muos/frontend/muhotkey >&3 &
 	MU_PID=$!
+}
 
-	while :; do
-		if ! kill -0 "$MU_PID" 2>/dev/null; then
-			break
-		fi
-
-		HOTKEY=$(IFS= read -r LINE <"$HOTKEY_FIFO" && printf '%s' "$LINE")
-		[ -z "$HOTKEY" ] && {
-			sleep 0.05
-			continue
-		}
-
-		[ -f "$MUOS_RUN_DIR/recent_wake" ] && continue
-
-		CHARGE_CHECK=$((CHARGE_CHECK + 1))
-		if [ "$CHARGE_CHECK" -ge 32 ]; then
-			if pgrep -f muxcharge >/dev/null 2>&1; then
-				CHARGE_ACTIVE=1
-			else
-				CHARGE_ACTIVE=0
-			fi
-			CHARGE_CHECK=0
-		fi
-
-		if [ "$CHARGE_CHECK" -eq 0 ]; then
-			IS_NORMAL_MODE && IS_HANDHELD_MODE && /opt/muos/script/mux/idle.sh start
-		fi
-
-		# Don't respond to any hotkeys while in charge mode or with lid closed.
-		if [ "$CHARGE_ACTIVE" -eq 1 ] || LID_CLOSED; then
-			continue
-		fi
-
-		HANDLE_HOTKEY "$HOTKEY"
-	done
-
+STOP_MUHOTKEY() {
+	[ "$MU_PID" -gt 0 ] && kill "$MU_PID" 2>/dev/null
 	wait "$MU_PID" 2>/dev/null
-	sleep 0.1
+	MU_PID=0
+}
+
+# Ensure clean shutdown!
+trap 'STOP_MUHOTKEY; exit 0' INT TERM
+
+START_MUHOTKEY
+
+while :; do
+	# Restart if muhotkey kicked the bucket
+	if ! kill -0 "$MU_PID" 2>/dev/null; then
+		STOP_MUHOTKEY
+		START_MUHOTKEY
+	fi
+
+	if ! IFS= read -r HOTKEY <&3; then
+		continue
+	fi
+
+	[ -z "$HOTKEY" ] && continue
+	[ -f "$MUOS_RUN_DIR/recent_wake" ] && continue
+
+	CHARGE_CHECK=$((CHARGE_CHECK + 1))
+	if [ "$CHARGE_CHECK" -ge 32 ]; then
+		if pgrep -f muxcharge >/dev/null 2>&1; then
+			CHARGE_ACTIVE=1
+		else
+			CHARGE_ACTIVE=0
+		fi
+		CHARGE_CHECK=0
+	fi
+
+	if [ "$CHARGE_CHECK" -eq 0 ]; then
+		IS_NORMAL_MODE && IS_HANDHELD_MODE && /opt/muos/script/mux/idle.sh start
+	fi
+
+	# Don't respond to any hotkeys while in charge mode or with lid closed.
+	if [ "$CHARGE_ACTIVE" -eq 1 ] || LID_CLOSED; then
+		continue
+	fi
+
+	HANDLE_HOTKEY "$HOTKEY"
 done
