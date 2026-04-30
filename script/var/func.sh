@@ -1129,6 +1129,32 @@ THEME_PNG_IMAGE() {
 	PNG_RECOLOUR="FFFFFF"
 	PNG_RECOLOUR_ALPHA=0
 
+	NORMALISE_HEX() {
+		VAL="${1#\#}"
+
+		case "$VAL" in
+			[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])
+				printf "%s" "$VAL"
+				return 0
+				;;
+		esac
+
+		return 1
+	}
+
+	CLAMP_ALPHA() {
+		VAL="$1"
+
+		case "$VAL" in
+			'' | *[!0-9]*) VAL=0 ;;
+		esac
+
+		[ "$VAL" -lt 0 ] && VAL=0
+		[ "$VAL" -gt 255 ] && VAL=255
+
+		printf "%s" "$VAL"
+	}
+
 	JSONPATH="$THEME_DIR/${ROLE}.json"
 
 	if [ -e "$THEME_DIR/active.txt" ]; then
@@ -1139,25 +1165,74 @@ THEME_PNG_IMAGE() {
 	fi
 
 	if [ -e "$JSONPATH" ]; then
-		printf "Found Bootlogo Json: %s\n" "$JSONPATH"
-		BACKGROUND_COLOUR=$(jq -r '.background_colour' "$JSONPATH")
-		BACKGROUND_GRADIENT_COLOUR=$(jq -r '.background_gradient_colour // .background_colour' "$JSONPATH")
-		PNG_RECOLOUR=$(jq -r '.png_recolour' "$JSONPATH")
-		RAW_ALPHA=$(jq -r '.png_recolour_alpha' "$JSONPATH")
-		PNG_RECOLOUR_ALPHA=$((RAW_ALPHA * 100 / 255))
+		printf "Found '%s' JSON: %s\n" "$ROLE" "$JSONPATH"
+
+		JQ_VAL=$(jq -r '.background_colour // empty' "$JSONPATH")
+		if [ -n "$JQ_VAL" ] && HEX=$(NORMALISE_HEX "$JQ_VAL"); then
+			BACKGROUND_COLOUR="$HEX"
+		fi
+
+		JQ_VAL=$(jq -r '.background_gradient_colour // empty' "$JSONPATH")
+		if [ -n "$JQ_VAL" ] && HEX=$(NORMALISE_HEX "$JQ_VAL"); then
+			BACKGROUND_GRADIENT_COLOUR="$HEX"
+		else
+			BACKGROUND_GRADIENT_COLOUR="$BACKGROUND_COLOUR"
+		fi
+
+		JQ_VAL=$(jq -r '.png_recolour // empty' "$JSONPATH")
+		if [ -n "$JQ_VAL" ] && HEX=$(NORMALISE_HEX "$JQ_VAL"); then
+			PNG_RECOLOUR="$HEX"
+		fi
+
+		JQ_VAL=$(jq -r '.png_recolour_alpha // empty' "$JSONPATH")
+		if [ -n "$JQ_VAL" ]; then
+			RAW_ALPHA=$(CLAMP_ALPHA "$JQ_VAL")
+			PNG_RECOLOUR_ALPHA=$((RAW_ALPHA * 100 / 255))
+		fi
+	else
+		printf "No '%s' JSON found... using defaults!\n" "$ROLE"
 	fi
 
-	printf "Creating Bootlogo with settings:\n"
+	[ -z "$BACKGROUND_GRADIENT_COLOUR" ] && BACKGROUND_GRADIENT_COLOUR="$BACKGROUND_COLOUR"
+
+	if [ "$PNG_RECOLOUR_ALPHA" -le 0 ]; then
+		PNG_RECOLOUR=""
+		PNG_RECOLOUR_ALPHA=0
+	fi
+
+	printf "Creating '%s' image:\n" "$ROLE"
+	printf "SRC: %s\n" "$SRC"
+	printf "OUT: %s\n" "$OUT"
 	printf "BACKGROUND_COLOUR: %s\n" "$BACKGROUND_COLOUR"
 	printf "BACKGROUND_GRADIENT_COLOUR: %s\n" "$BACKGROUND_GRADIENT_COLOUR"
 	printf "PNG_RECOLOUR: %s\n" "$PNG_RECOLOUR"
 	printf "PNG_RECOLOUR_ALPHA: %s\n" "$PNG_RECOLOUR_ALPHA"
 
-	magick -size "${DEVICE_W}x${DEVICE_H}" gradient:"#${BACKGROUND_COLOUR}-#${BACKGROUND_GRADIENT_COLOUR}" -depth 24 "$OUT"
-	magick "$SRC" -fill "#${PNG_RECOLOUR}" -colorize "$PNG_RECOLOUR_ALPHA" "/tmp/${ROLE}_fg.png"
-	magick "$OUT" "/tmp/${ROLE}_fg.png" -gravity center -composite "$OUT"
+	TMP_BG="/tmp/${ROLE}_bg_$$.png"
+	TMP_FG="/tmp/${ROLE}_fg_$$.png"
+	TMP_OUT="/tmp/${ROLE}_out_$$.png"
 
-	rm -f "/tmp/${ROLE}_fg.png"
+	rm -f "$TMP_BG" "$TMP_FG" "$TMP_OUT"
+
+	if [ "$BACKGROUND_COLOUR" = "$BACKGROUND_GRADIENT_COLOUR" ]; then
+		magick -size "${DEVICE_W}x${DEVICE_H}" xc:"#${BACKGROUND_COLOUR}" "$TMP_BG"
+	else
+		magick -size 1x"${DEVICE_H}" gradient:"#${BACKGROUND_COLOUR}-#${BACKGROUND_GRADIENT_COLOUR}" -resize "${DEVICE_W}x${DEVICE_H}!" "$TMP_BG"
+	fi
+
+	if [ "$PNG_RECOLOUR_ALPHA" -gt 0 ]; then
+		magick "$SRC" -fill "#${PNG_RECOLOUR}" -colorize "$PNG_RECOLOUR_ALPHA" "$TMP_FG"
+	else
+		cp -f "$SRC" "$TMP_FG"
+	fi
+
+	magick "$TMP_FG" "$TMP_BG" -compose Dst_Over -composite "$TMP_OUT"
+	case "$OUT" in
+		*.bmp | *.BMP) magick "$TMP_OUT" BMP3:"$OUT" ;;
+		*) mv -f "$TMP_OUT" "$OUT" ;;
+	esac
+
+	rm -f "$TMP_BG" "$TMP_FG" "$TMP_OUT"
 }
 
 RESOLVE_ROLE_IMAGE() {
@@ -1202,11 +1277,18 @@ UPDATE_IMAGE_ROLE() {
 UPDATE_BOOTLOGO() {
 	rm -f "/tmp/btl_go"
 
-	ACTIVE=$(GET_VAR "config" "theme/active")
 	BOOT_MOUNT=$(GET_VAR "device" "storage/boot/mount")
+	[ -n "$BOOT_MOUNT" ] || return 1
+
 	DEVICE_W=$(GET_VAR "device" "screen/internal/width")
 	DEVICE_H=$(GET_VAR "device" "screen/internal/height")
 
+	[ -n "$DEVICE_W" ] || DEVICE_W=$(GET_VAR "device" "screen/width")
+	[ -n "$DEVICE_H" ] || DEVICE_H=$(GET_VAR "device" "screen/height")
+	[ -n "$DEVICE_W" ] || return 1
+	[ -n "$DEVICE_H" ] || return 1
+
+	ACTIVE=$(GET_VAR "config" "theme/active")
 	THEME_DIR="$MUOS_STORE_DIR/theme/$ACTIVE"
 	RES_DIR="${DEVICE_W}x${DEVICE_H}"
 
