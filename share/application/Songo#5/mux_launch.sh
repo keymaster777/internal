@@ -147,20 +147,5 @@ if [[ "$SONGO_CFW_NAME" != "NONE" ]]; then
 	sh "${GAMEDIR}/runtime/volume-indicator/teardown_vol_indicator" "${SONGO_CFW_NAME}"
 fi
 
-# Theoretically the mount should only exist once, I use the loop on the off chance something goes horribly wrong,
-# its important to be sure its unmounted or else closing the lid of the clamshell will be ignored after the app
-# exit, until system restart at least
-
-TARGET="/sys/class/power_supply/axp2202-battery/hallkey"
-if [ -e "$TARGET" ]; then
-    while grep -q " $TARGET " /proc/mounts 2>/dev/null; do
-        if umount -l "$TARGET" 2>/dev/null; then
-            echo "Unmounted hallkey override: $TARGET"
-        else
-            echo "Failed to unmount: $TARGET"
-            break
-        fi
-    done
-fi
 
 #pm_finish
